@@ -1,2 +1,0 @@
-# petali
-petali ios
