@@ -1,0 +1,84 @@
+# Compila l'app iOS su un Mac in cloud. Questo passaggio non richiede account Apple:
+# controlla solo che il progetto compili. La firma e il caricamento su App Store
+# si configurano dopo, quando l'app e' pronta.
+workflows:
+  ios-compila:
+    name: Petali iOS - verifica compilazione
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    scripts:
+      - name: Installa dipendenze
+        script: |
+          npm install
+      - name: Crea il progetto iOS
+        script: |
+          npx cap add ios
+          npx cap sync ios
+      - name: Compila il progetto
+        script: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+{
+  "name": "petali-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gioco m'ama non m'ama con 15 fiori e il loro significato",
+  "scripts": {
+    "test": "node --test tests/fiori.test.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}
+# Petali - gioco m'ama, non m'ama
+
+15 fiori, ciascuno con il suo significato. Scegli un fiore, togli i petali uno alla volta
+e scopri il risultato, con il messaggio del fiore.
+
+## Prova nel browser
+
+Apri `www/index.html` con il browser. Tutto funziona senza installare niente.
+
+## Test automatici
+
+    npm test
+
+## APK Android
+
+Serve Node.js (versione LTS) e Android Studio, come per il progetto precedente.
+
+1. Nella cartella del progetto:
+
+       npm install
+       npx cap add android
+       npx cap sync android
+       npx cap open android
+
+2. In Android Studio, aspetta la fine di Gradle, poi scegli
+   **Build > Build APK(s)**.
+3. Il file si trova in `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+Dopo ogni modifica a `www/`, esegui di nuovo `npx cap sync android`.
+
+## Dove modificare
+
+- `www/fiori.js`: nomi, colori, significati e messaggi dei 15 fiori.
+- `www/styles.css`: colori e grafica.
+- `www/app.js`: come vengono disegnati i fiori e come si svolge il gioco.
+
+## Nota
+
+I significati dei fiori sono quelli della tradizione del linguaggio dei fiori. Il gioco è un passatempo, non una previsione.
+
+{
+  "appId": "com.aivevia.petali",
+  "appName": "Petali",
+  "webDir": "www"
+}
