@@ -1,20 +1,53 @@
-# Compila l'app iOS su un Mac in cloud. Questo passaggio non richiede account Apple:
-# controlla solo che il progetto compili. La firma e il caricamento su App Store
-# si configurano dopo, quando l'app e' pronta.
+# Build mobile della versione Petali 3D presente nel ramo release del repository sorgente.
+# Una IPA installabile richiede certificato Apple e provisioning profile.
 workflows:
-  ios-compila:
-    name: Petali iOS - verifica compilazione
+  petali-android-apk:
+    name: Petali Android APK test
+    max_build_duration: 120
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    environment:
+      node: v22.11.0
     scripts:
-      - name: Installa dipendenze
+      - name: Scarica release Petali
         script: |
-          npm install
-      - name: Crea il progetto iOS
+          git clone --depth 1 --branch release/petali-pagamenti-verifica-2026-10-28 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Compila Android APK
         script: |
+          set -e
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build:bridge
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+    artifacts:
+      - petali-build/android-snapshot-2026-10-27/android/app/build/outputs/apk/debug/*.apk
+
+  petali-ios-compile:
+    name: Petali iOS compilazione senza firma
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      node: v22.11.0
+      xcode: latest
+    scripts:
+      - name: Scarica release Petali
+        script: |
+          git clone --depth 1 --branch release/petali-pagamenti-verifica-2026-10-28 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Prepara progetto iOS
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          npm ci --no-audit --no-fund
+          npm run build:bridge
           npx cap add ios
           npx cap sync ios
-      - name: Compila il progetto
+      - name: Compila iOS senza firma Apple
         script: |
-          cd ios/App
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+          set -e
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -derivedDataPath build build
+    artifacts:
+      - petali-build/android-snapshot-2026-10-27/ios/App/build/Build/Products/Release-iphonesimulator/*.app
