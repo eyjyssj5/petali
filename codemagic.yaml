@@ -41,6 +41,8 @@ workflows:
     name: Petali iOS App Store - IPA firmata
     instance_type: mac_mini_m2
     max_build_duration: 120
+    integrations:
+      app_store_connect: SimulaEsame-Codemagic
     environment:
       node: v22.11.0
       xcode: latest
