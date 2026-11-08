@@ -20,6 +20,7 @@ workflows:
           npm run build:bridge
           npx cap sync android
           cd android
+          printf '\nandroid.useAndroidX=true\nandroid.enableJetifier=true\n' >> gradle.properties
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
     artifacts:
