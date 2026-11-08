@@ -38,14 +38,17 @@ workflows:
       - $CM_EXPORT_DIR/Petali-Android-build.log
 
   petali-ios-compile:
-    name: Petali iOS IPA - non firmata
+    name: Petali iOS App Store - IPA firmata
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
       node: v22.11.0
       xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.aivevia.petali
     scripts:
-      - name: Recupera sorgenti aggiornati
+      - name: Recupera sorgenti Petali per iPhone
         script: |
           set -euo pipefail
           git clone --depth 1 --branch release/petali-pagamenti-verifica-2026-10-28 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
@@ -54,18 +57,26 @@ workflows:
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
           npm ci --no-audit --no-fund
+          npm test
           npm run build:bridge
           npx cap add ios
           npx cap sync ios
-      - name: Compila iOS senza firma Apple
+      - name: Associa certificato e profilo Apple
+        script: |
+          set -euo pipefail
+          PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
+          test -d "$PROJECT"
+          xcode-project use-profiles --project "$PROJECT"
+      - name: Genera IPA firmata per App Store Connect
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
-          xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO -derivedDataPath "$CM_BUILD_DIR/petali-ios-derived" build
-          mkdir -p "$CM_EXPORT_DIR/Payload"
-          cp -R "$CM_BUILD_DIR/petali-ios-derived/Build/Products/Release-iphoneos/App.app" "$CM_EXPORT_DIR/Payload/"
-          cd "$CM_EXPORT_DIR"
-          zip -q -r Petali-iOS-UNSIGNED.ipa Payload
-          rm -rf Payload
+          xcode-project build-ipa --project App.xcodeproj --scheme App
+          IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          mkdir -p "$CM_EXPORT_DIR"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-iOS-AppStore.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-iOS-AppStore.ipa"
     artifacts:
-      - $CM_EXPORT_DIR/Petali-iOS-UNSIGNED.ipa
+      - $CM_EXPORT_DIR/Petali-iOS-AppStore.ipa
+      - /tmp/xcodebuild_logs/*.log
