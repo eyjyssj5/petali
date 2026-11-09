@@ -1,5 +1,5 @@
 # Petali: i sorgenti aggiornati sono nel repository petali-privacy, ramo release.
-# Questo file genera un APK Android di prova e, separatamente, una IPA iOS NON firmata.
+# Questo file genera un APK Android di prova e una IPA iOS firmata per App Store Connect.
 workflows:
   petali-android-apk:
     name: Petali Android APK - prova
@@ -82,3 +82,8 @@ workflows:
     artifacts:
       - $CM_EXPORT_DIR/Petali-iOS-AppStore.ipa
       - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
