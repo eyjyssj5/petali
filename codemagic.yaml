@@ -44,6 +44,8 @@ workflows:
     integrations:
       app_store_connect: SimulaEsame-Codemagic
     environment:
+      groups:
+        - petali_revenuecat
       node: v22.11.0
       xcode: latest
       ios_signing:
