@@ -75,6 +75,18 @@ workflows:
           PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
           test -d "$PROJECT"
           xcode-project use-profiles --project "$PROJECT"
+      - name: Aggiorna numero build per TestFlight
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          BUILD_INDEX="${CM_BUILD_NUMBER:-1}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Numero di compilazione Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( BUILD_INDEX + 1 ))
+          if [ "$NEXT_BUILD_NUMBER" -lt 2 ]; then NEXT_BUILD_NUMBER=2; fi
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          echo "Numero iOS per il prossimo upload: $NEXT_BUILD_NUMBER"
       - name: Genera IPA firmata per App Store Connect
         script: |
           set -euo pipefail
