@@ -105,3 +105,67 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
+
+  petali-ios-ad-hoc:
+    name: Petali iOS Ad Hoc - installazione su iPhone
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: SimulaEsame-Codemagic
+    environment:
+      groups:
+        - petali_revenuecat
+      node: v22.11.0
+      xcode: latest
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.aivevia.petali
+    scripts:
+      - name: Recupera sorgenti Petali per iPhone
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch release/petali-pagamenti-verifica-2026-10-28 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Prepara progetto iOS
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          npm ci --no-audit --no-fund
+          npm test
+          if [ -z "${REVENUECAT_IOS_PUBLIC_KEY:-}" ]; then
+            echo "ERRORE: chiave pubblica RevenueCat iOS mancante. Configura REVENUECAT_IOS_PUBLIC_KEY in Codemagic prima di generare la build App Store."
+            exit 2
+          fi
+          npm run build:bridge
+          npx cap add ios
+          npx cap sync ios
+      - name: Associa certificato e profilo Apple
+        script: |
+          set -euo pipefail
+          PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
+          test -d "$PROJECT"
+          xcode-project use-profiles --project "$PROJECT" --archive-method=ad-hoc
+      - name: Aggiorna numero build per installazione Ad Hoc
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          BUILD_INDEX="${CM_BUILD_NUMBER:-1}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Numero di compilazione Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( BUILD_INDEX + 1 ))
+          if [ "$NEXT_BUILD_NUMBER" -lt 2 ]; then NEXT_BUILD_NUMBER=2; fi
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          echo "Numero iOS per il prossimo upload: $NEXT_BUILD_NUMBER"
+      - name: Genera IPA Ad Hoc per iPhone
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          xcode-project build-ipa --project App.xcodeproj --scheme App
+          IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          mkdir -p "$CM_EXPORT_DIR"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-iOS-AdHoc.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-iOS-AppStore.ipa"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-iOS-AppStore.ipa
+      - /tmp/xcodebuild_logs/*.log
