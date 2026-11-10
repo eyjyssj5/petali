@@ -165,7 +165,7 @@ workflows:
           test -n "$IPA"
           mkdir -p "$CM_EXPORT_DIR"
           cp "$IPA" "$CM_EXPORT_DIR/Petali-iOS-AdHoc.ipa"
-          test -s "$CM_EXPORT_DIR/Petali-iOS-AppStore.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-iOS-AdHoc.ipa"
     artifacts:
-      - $CM_EXPORT_DIR/Petali-iOS-AppStore.ipa
+      - $CM_EXPORT_DIR/Petali-iOS-AdHoc.ipa
       - /tmp/xcodebuild_logs/*.log
