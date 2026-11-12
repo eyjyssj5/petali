@@ -143,7 +143,32 @@ workflows:
           set -euo pipefail
           PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
           test -d "$PROJECT"
-          xcode-project use-profiles --project "$PROJECT" --archive-method=ad-hoc
+          # Usa esclusivamente il profilo appena generato per iPhone 14.
+          # Evita di selezionare un vecchio profilo Ad Hoc con lo stesso bundle ID.
+          EXPECTED_UUID="a62933cd-33e5-4712-a73f-43099b5149c9"
+          EXPECTED_UDID="00008110-000609C102FB801E"
+          PROFILE_SELECTED=""
+          for PROFILE in "$HOME"/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision "$HOME"/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
+            [ -f "$PROFILE" ] || continue
+            PLIST="$CM_BUILD_DIR/petali-candidate-profile.plist"
+            /usr/bin/security cms -D -i "$PROFILE" > "$PLIST" 2>/dev/null || continue
+            PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PLIST" 2>/dev/null || true)"
+            if [ "$PROFILE_UUID" = "$EXPECTED_UUID" ]; then
+              if ! /usr/bin/grep -q "$EXPECTED_UDID" "$PLIST"; then
+                echo "ERRORE: profilo trovato ma iPhone 14 non autorizzato."
+                exit 2
+              fi
+              PROFILE_SELECTED="$PROFILE"
+              break
+            fi
+          done
+          if [ -z "$PROFILE_SELECTED" ]; then
+            echo "ERRORE: profilo Petali-iPhone14-AdHoc non caricato su Codemagic."
+            echo "Carica il file con Reference name Petali-iPhone14-AdHoc in Code signing identities > iOS provisioning profiles."
+            exit 2
+          fi
+          echo "Profilo corretto trovato: $EXPECTED_UUID (iPhone 14 incluso)"
+          xcode-project use-profiles --project "$PROJECT" --profile "$PROFILE_SELECTED" --archive-method=ad-hoc
       - name: Aggiorna numero build per installazione Ad Hoc
         script: |
           set -euo pipefail
