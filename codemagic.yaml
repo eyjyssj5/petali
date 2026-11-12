@@ -69,11 +69,22 @@ workflows:
           npm run build:bridge
           npx cap add ios
           npx cap sync ios
-          # PETALI: applica l'icona floreale già utilizzata su Android anche a iOS.
-          # Il catalogo AppIcon è generato da Capacitor, quindi l'icona va sostituita ad ogni build.
-          swift native/make-ios-app-icon.swift \
-            "$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" \
-            "$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          # Icona iOS: usa sips, nativo macOS, senza compilare script Swift.
+          # Il passaggio intermedio JPEG rimuove l'alpha: App Store richiede un'icona opaca.
+          ICON_SOURCE="$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_DIR="$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          test -s "$ICON_SOURCE"
+          mkdir -p "$ICON_DIR"
+          ICON_TMP="$(mktemp -d)"
+          sips -s format jpeg -s formatOptions best "$ICON_SOURCE" --out "$ICON_TMP/petali.jpg" >/dev/null
+          sips -s format png -z 1024 1024 "$ICON_TMP/petali.jpg" --out "$ICON_DIR/AppIcon-512@2x.png" >/dev/null
+          python3 - "$ICON_DIR/Contents.json" <<'PYICON'
+          import json, sys
+          with open(sys.argv[1], 'w', encoding='utf8') as fp:
+              json.dump({'images': [{'filename': 'AppIcon-512@2x.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'}], 'info': {'author': 'xcode', 'version': 1}}, fp)
+          PYICON
+          test -s "$ICON_DIR/AppIcon-512@2x.png"
+          echo "Icona PETALI iOS creata in $ICON_DIR"
       - name: Associa certificato e profilo Apple
         script: |
           set -euo pipefail
@@ -143,11 +154,22 @@ workflows:
           npm run build:bridge
           npx cap add ios
           npx cap sync ios
-          # PETALI: applica l'icona floreale già utilizzata su Android anche a iOS.
-          # Il catalogo AppIcon è generato da Capacitor, quindi l'icona va sostituita ad ogni build.
-          swift native/make-ios-app-icon.swift \
-            "$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" \
-            "$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          # Icona iOS: usa sips, nativo macOS, senza compilare script Swift.
+          # Il passaggio intermedio JPEG rimuove l'alpha: App Store richiede un'icona opaca.
+          ICON_SOURCE="$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_DIR="$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          test -s "$ICON_SOURCE"
+          mkdir -p "$ICON_DIR"
+          ICON_TMP="$(mktemp -d)"
+          sips -s format jpeg -s formatOptions best "$ICON_SOURCE" --out "$ICON_TMP/petali.jpg" >/dev/null
+          sips -s format png -z 1024 1024 "$ICON_TMP/petali.jpg" --out "$ICON_DIR/AppIcon-512@2x.png" >/dev/null
+          python3 - "$ICON_DIR/Contents.json" <<'PYICON'
+          import json, sys
+          with open(sys.argv[1], 'w', encoding='utf8') as fp:
+              json.dump({'images': [{'filename': 'AppIcon-512@2x.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'}], 'info': {'author': 'xcode', 'version': 1}}, fp)
+          PYICON
+          test -s "$ICON_DIR/AppIcon-512@2x.png"
+          echo "Icona PETALI iOS creata in $ICON_DIR"
       - name: Associa certificato e profilo Apple
         script: |
           set -euo pipefail
