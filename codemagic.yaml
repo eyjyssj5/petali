@@ -69,6 +69,11 @@ workflows:
           npm run build:bridge
           npx cap add ios
           npx cap sync ios
+          # PETALI: applica l'icona floreale già utilizzata su Android anche a iOS.
+          # Il catalogo AppIcon è generato da Capacitor, quindi l'icona va sostituita ad ogni build.
+          swift native/make-ios-app-icon.swift \
+            "$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" \
+            "$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
       - name: Associa certificato e profilo Apple
         script: |
           set -euo pipefail
@@ -138,6 +143,11 @@ workflows:
           npm run build:bridge
           npx cap add ios
           npx cap sync ios
+          # PETALI: applica l'icona floreale già utilizzata su Android anche a iOS.
+          # Il catalogo AppIcon è generato da Capacitor, quindi l'icona va sostituita ad ogni build.
+          swift native/make-ios-app-icon.swift \
+            "$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" \
+            "$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
       - name: Associa certificato e profilo Apple
         script: |
           set -euo pipefail
