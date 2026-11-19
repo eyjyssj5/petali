@@ -95,12 +95,12 @@ workflows:
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
-          BUILD_INDEX="${CM_BUILD_NUMBER:-1}"
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
           case "$BUILD_INDEX" in
             ''|*[!0-9]*) echo "Numero di compilazione Codemagic non valido"; exit 1 ;;
           esac
           NEXT_BUILD_NUMBER=$(( BUILD_INDEX + 1 ))
-          if [ "$NEXT_BUILD_NUMBER" -lt 2 ]; then NEXT_BUILD_NUMBER=2; fi
+          if [ "$NEXT_BUILD_NUMBER" -lt 3 ]; then NEXT_BUILD_NUMBER=3; fi
           agvtool new-version -all "$NEXT_BUILD_NUMBER"
           echo "Numero iOS per il prossimo upload: $NEXT_BUILD_NUMBER"
       - name: Genera IPA firmata per App Store Connect
@@ -205,12 +205,12 @@ workflows:
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
-          BUILD_INDEX="${CM_BUILD_NUMBER:-1}"
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
           case "$BUILD_INDEX" in
             ''|*[!0-9]*) echo "Numero di compilazione Codemagic non valido"; exit 1 ;;
           esac
           NEXT_BUILD_NUMBER=$(( BUILD_INDEX + 1 ))
-          if [ "$NEXT_BUILD_NUMBER" -lt 2 ]; then NEXT_BUILD_NUMBER=2; fi
+          if [ "$NEXT_BUILD_NUMBER" -lt 3 ]; then NEXT_BUILD_NUMBER=3; fi
           agvtool new-version -all "$NEXT_BUILD_NUMBER"
           echo "Numero iOS per il prossimo upload: $NEXT_BUILD_NUMBER"
       - name: Genera IPA Ad Hoc per iPhone
