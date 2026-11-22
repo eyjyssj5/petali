@@ -466,7 +466,7 @@ workflows:
       node: v22.11.0
       java: 21
       vars:
-        PETALI_ANDROID_VERSION_CODE: "20261122"
+        PETALI_ANDROID_VERSION_CODE: "20261123"
     scripts:
       - name: Scarica versione PETALI REGALI V2
         script: |
