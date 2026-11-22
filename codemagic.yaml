@@ -461,8 +461,6 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
-      groups:
-        - petali_revenuecat
       android_signing:
         - petali-upload
       node: v22.11.0
@@ -474,7 +472,7 @@ workflows:
         script: |
           set -euo pipefail
           git clone --depth 1 --branch feature/petali-regali-occasioni-2026-11-22 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
-      - name: Controlla chiave PETALI e acquisti Android
+      - name: Controlla chiave di firma PETALI
         script: |
           set -euo pipefail
           for KEY in CM_KEYSTORE_PATH CM_KEYSTORE_PASSWORD CM_KEY_ALIAS CM_KEY_PASSWORD; do
@@ -483,23 +481,13 @@ workflows:
               exit 2
             fi
           done
-          if [ -z "${REVENUECAT_ANDROID_PUBLIC_KEY:-}" ]; then
-            echo "ERRORE: REVENUECAT_ANDROID_PUBLIC_KEY mancante."
-            echo "Codemagic > PETALI > Environment variables: aggiungi la chiave SDK pubblica Google Play (goog_...) nel gruppo petali_revenuecat."
-            echo "Recuperala da RevenueCat > Project settings > API Keys > PETALI Android. Non è la password del keystore."
-            exit 2
-          fi
           test -s "$CM_KEYSTORE_PATH"
           if [ "$CM_KEY_ALIAS" != "petali" ]; then
             echo "ERRORE: usare la chiave di upload PETALI esistente, con alias 'petali'."
             exit 2
           fi
-          if [ "${REVENUECAT_ANDROID_PUBLIC_KEY#goog_}" = "$REVENUECAT_ANDROID_PUBLIC_KEY" ]; then
-            echo "ERRORE: la chiave pubblica RevenueCat Android non inizia con goog_."
-            exit 2
-          fi
           keytool -list -keystore "$CM_KEYSTORE_PATH" -storepass:env CM_KEYSTORE_PASSWORD -alias "$CM_KEY_ALIAS" >/dev/null
-          echo "Chiave di firma PETALI presente e valida"
+          echo "Firma PETALI verificata; acquisti Android via Google Play Billing nativo"
       - name: Test, bridge Capacitor e AAB Release firmato
         script: |
           set -euo pipefail
