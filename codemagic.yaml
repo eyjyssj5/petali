@@ -440,9 +440,9 @@ workflows:
           test -n "$IPA"
           mkdir -p "$CM_EXPORT_DIR"
           cp "$IPA" "$CM_EXPORT_DIR/Petali-Regali-iOS-AppStore.ipa"
-          test -s "$CM_EXPORT_DIR/Petali-iOS-AppStore.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-Regali-iOS-AppStore.ipa"
     artifacts:
-      - $CM_EXPORT_DIR/Petali-iOS-AppStore.ipa
+      - $CM_EXPORT_DIR/Petali-Regali-iOS-AppStore.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
