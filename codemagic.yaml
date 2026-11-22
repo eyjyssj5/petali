@@ -477,12 +477,18 @@ workflows:
       - name: Controlla chiave PETALI e acquisti Android
         script: |
           set -euo pipefail
-          for KEY in CM_KEYSTORE_PATH CM_KEYSTORE_PASSWORD CM_KEY_ALIAS CM_KEY_PASSWORD REVENUECAT_ANDROID_PUBLIC_KEY; do
+          for KEY in CM_KEYSTORE_PATH CM_KEYSTORE_PASSWORD CM_KEY_ALIAS CM_KEY_PASSWORD; do
             if [ -z "${!KEY:-}" ]; then
-              echo "ERRORE: $KEY non configurata. Registra in Codemagic la chiave di upload PETALI già utilizzata su Google Play."
+              echo "ERRORE: $KEY mancante. Controlla l'Android keystore 'petali-upload' in Codemagic."
               exit 2
             fi
           done
+          if [ -z "${REVENUECAT_ANDROID_PUBLIC_KEY:-}" ]; then
+            echo "ERRORE: REVENUECAT_ANDROID_PUBLIC_KEY mancante."
+            echo "Codemagic > PETALI > Environment variables: aggiungi la chiave SDK pubblica Google Play (goog_...) nel gruppo petali_revenuecat."
+            echo "Recuperala da RevenueCat > Project settings > API Keys > PETALI Android. Non è la password del keystore."
+            exit 2
+          fi
           test -s "$CM_KEYSTORE_PATH"
           if [ "$CM_KEY_ALIAS" != "petali" ]; then
             echo "ERRORE: usare la chiave di upload PETALI esistente, con alias 'petali'."
