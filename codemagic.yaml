@@ -348,7 +348,12 @@ workflows:
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
           # Numero crescente univoco: evita di reinstallare una build Ad Hoc con lo stesso numero.
-          NEXT_BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Indice Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( 2000 + BUILD_INDEX ))
+          if [ "$NEXT_BUILD_NUMBER" -gt 9999 ]; then echo "Numero build oltre il limite"; exit 1; fi
           agvtool new-version -all "$NEXT_BUILD_NUMBER"
           echo "Numero build iPhone Ad Hoc: $NEXT_BUILD_NUMBER"
       - name: Genera IPA Ad Hoc per iPhone
@@ -424,7 +429,12 @@ workflows:
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
           # Build number univoco e crescente tra i workflow Codemagic.
-          NEXT_BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Indice Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( 3000 + BUILD_INDEX ))
+          if [ "$NEXT_BUILD_NUMBER" -gt 9999 ]; then echo "Numero build oltre il limite"; exit 1; fi
           agvtool new-version -all "$NEXT_BUILD_NUMBER"
           echo "Numero iOS App Store Connect: $NEXT_BUILD_NUMBER"
       - name: Genera IPA firmata per App Store Connect
