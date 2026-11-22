@@ -455,3 +455,68 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
+
+  petali-regali-v2-android-play:
+    name: Petali REGALI V2 Android AAB - Google Play Console
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      groups:
+        - petali_revenuecat
+      android_signing:
+        - petali-upload
+      node: v22.11.0
+      java: 21
+      vars:
+        PETALI_ANDROID_VERSION_CODE: "20261122"
+    scripts:
+      - name: Scarica versione PETALI REGALI V2
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/petali-regali-occasioni-2026-11-22 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Controlla chiave PETALI e acquisti Android
+        script: |
+          set -euo pipefail
+          for KEY in CM_KEYSTORE_PATH CM_KEYSTORE_PASSWORD CM_KEY_ALIAS CM_KEY_PASSWORD REVENUECAT_ANDROID_PUBLIC_KEY; do
+            if [ -z "${!KEY:-}" ]; then
+              echo "ERRORE: $KEY non configurata. Registra in Codemagic la chiave di upload PETALI già utilizzata su Google Play."
+              exit 2
+            fi
+          done
+          test -s "$CM_KEYSTORE_PATH"
+          if [ "$CM_KEY_ALIAS" != "petali" ]; then
+            echo "ERRORE: usare la chiave di upload PETALI esistente, con alias 'petali'."
+            exit 2
+          fi
+          if [ "${REVENUECAT_ANDROID_PUBLIC_KEY#goog_}" = "$REVENUECAT_ANDROID_PUBLIC_KEY" ]; then
+            echo "ERRORE: la chiave pubblica RevenueCat Android non inizia con goog_."
+            exit 2
+          fi
+          keytool -list -keystore "$CM_KEYSTORE_PATH" -storepass:env CM_KEYSTORE_PASSWORD -alias "$CM_KEY_ALIAS" >/dev/null
+          echo "Chiave di firma PETALI presente e valida"
+      - name: Test, bridge Capacitor e AAB Release firmato
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          python3 verifica_petali.py
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build:bridge
+          npx cap sync android
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > android/local.properties
+          printf '\nandroid.useAndroidX=true\nandroid.enableJetifier=true\n' >> android/gradle.properties
+          cd android
+          chmod +x gradlew
+          mkdir -p "$CM_EXPORT_DIR"
+          ./gradlew --no-daemon --stacktrace bundleRelease 2>&1 | tee "$CM_EXPORT_DIR/Petali-Regali-V2-AAB-build.log"
+          BUNDLE="app/build/outputs/bundle/release/app-release.aab"
+          test -s "$BUNDLE"
+          jarsigner -verify "$BUNDLE" 2>&1 | tee "$CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log"
+          grep -q "jar verified" "$CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log"
+          unzip -tq "$BUNDLE" >/dev/null
+          cp "$BUNDLE" "$CM_EXPORT_DIR/Petali-Regali-V2-Play-FIRMATO.aab"
+          shasum -a 256 "$CM_EXPORT_DIR/Petali-Regali-V2-Play-FIRMATO.aab"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-Regali-V2-Play-FIRMATO.aab
+      - $CM_EXPORT_DIR/Petali-Regali-V2-AAB-build.log
+      - $CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log
