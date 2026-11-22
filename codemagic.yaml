@@ -265,7 +265,7 @@ workflows:
       - $CM_EXPORT_DIR/Petali-Regali-Android-build.log
 
   petali-regali-ios-ad-hoc:
-    name: Petali REGALI iOS Ad Hoc - iPhone 14
+    name: Petali REGALI V2 iOS Ad Hoc - iPhone 14
     instance_type: mac_mini_m2
     max_build_duration: 120
     integrations:
@@ -347,14 +347,10 @@ workflows:
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
-          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
-          case "$BUILD_INDEX" in
-            ''|*[!0-9]*) echo "Numero di compilazione Codemagic non valido"; exit 1 ;;
-          esac
-          NEXT_BUILD_NUMBER=$(( BUILD_INDEX + 1 ))
-          if [ "$NEXT_BUILD_NUMBER" -lt 3 ]; then NEXT_BUILD_NUMBER=3; fi
+          # Numero crescente univoco: evita di reinstallare una build Ad Hoc con lo stesso numero.
+          NEXT_BUILD_NUMBER="$(date -u +%Y%m%d%H%M)"
           agvtool new-version -all "$NEXT_BUILD_NUMBER"
-          echo "Numero iOS per il prossimo upload: $NEXT_BUILD_NUMBER"
+          echo "Numero build iPhone Ad Hoc: $NEXT_BUILD_NUMBER"
       - name: Genera IPA Ad Hoc per iPhone
         script: |
           set -euo pipefail
@@ -363,14 +359,14 @@ workflows:
           IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
           test -n "$IPA"
           mkdir -p "$CM_EXPORT_DIR"
-          cp "$IPA" "$CM_EXPORT_DIR/Petali-Regali-iOS-AdHoc.ipa"
-          test -s "$CM_EXPORT_DIR/Petali-Regali-iOS-AdHoc.ipa"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-Regali-V2-iOS-AdHoc.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-Regali-V2-iOS-AdHoc.ipa"
     artifacts:
-      - $CM_EXPORT_DIR/Petali-Regali-iOS-AdHoc.ipa
+      - $CM_EXPORT_DIR/Petali-Regali-V2-iOS-AdHoc.ipa
       - /tmp/xcodebuild_logs/*.log
 
   petali-regali-ios-appstore:
-    name: Petali REGALI iOS App Store - upload App Store Connect
+    name: Petali REGALI V2 iOS App Store - upload App Store Connect
     instance_type: mac_mini_m2
     max_build_duration: 120
     integrations:
@@ -439,10 +435,10 @@ workflows:
           IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
           test -n "$IPA"
           mkdir -p "$CM_EXPORT_DIR"
-          cp "$IPA" "$CM_EXPORT_DIR/Petali-Regali-iOS-AppStore.ipa"
-          test -s "$CM_EXPORT_DIR/Petali-Regali-iOS-AppStore.ipa"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-Regali-V2-iOS-AppStore.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-Regali-V2-iOS-AppStore.ipa"
     artifacts:
-      - $CM_EXPORT_DIR/Petali-Regali-iOS-AppStore.ipa
+      - $CM_EXPORT_DIR/Petali-Regali-V2-iOS-AppStore.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
