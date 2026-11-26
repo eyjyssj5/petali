@@ -514,3 +514,312 @@ workflows:
       - $CM_EXPORT_DIR/Petali-Regali-V2-Play-FIRMATO.aab
       - $CM_EXPORT_DIR/Petali-Regali-V2-AAB-build.log
       - $CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log
+
+  # Isolated Petali credits/rewarded video builds. Old workflows remain untouched.
+  petali-credits-ios-test:
+    name: Petali 1.0.1 CREDITI - iOS Ad Hoc TEST
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: SimulaEsame-Codemagic
+    environment:
+      groups:
+        - petali_revenuecat
+      node: v22.11.0
+      xcode: latest
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.aivevia.petali
+    scripts:
+      - name: Recupera sorgenti Petali per iPhone
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/petali-credits-rewarded-1.0.1 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Prepara progetto iOS
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          npm ci --no-audit --no-fund
+          npm install --save-exact @capacitor-community/admob@8.4.2 --no-audit --no-fund
+          npm test
+          if [ -z "${REVENUECAT_IOS_PUBLIC_KEY:-}" ]; then
+            echo "ERRORE: chiave pubblica RevenueCat iOS mancante. Configura REVENUECAT_IOS_PUBLIC_KEY in Codemagic prima di generare la build Ad Hoc."
+            exit 2
+          fi
+          export PETALI_ADS_PLATFORM=ios PETALI_ADS_MODE=test
+          node native/configure-ads.mjs web
+          npm run build:bridge
+          npx cap add ios
+          npx cap sync ios
+          node native/configure-ads.mjs native
+          # Icona iOS: usa sips, nativo macOS, senza compilare script Swift.
+          # Il passaggio intermedio JPEG rimuove l'alpha: App Store richiede un'icona opaca.
+          ICON_SOURCE="$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_DIR="$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          test -s "$ICON_SOURCE"
+          mkdir -p "$ICON_DIR"
+          ICON_TMP="$(mktemp -d)"
+          sips -s format jpeg -s formatOptions best "$ICON_SOURCE" --out "$ICON_TMP/petali.jpg" >/dev/null
+          sips -s format png -z 1024 1024 "$ICON_TMP/petali.jpg" --out "$ICON_DIR/AppIcon-512@2x.png" >/dev/null
+          python3 - "$ICON_DIR/Contents.json" <<'PYICON'
+          import json, sys
+          with open(sys.argv[1], 'w', encoding='utf8') as fp:
+              json.dump({'images': [{'filename': 'AppIcon-512@2x.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'}], 'info': {'author': 'xcode', 'version': 1}}, fp)
+          PYICON
+          test -s "$ICON_DIR/AppIcon-512@2x.png"
+          echo "Icona PETALI iOS creata in $ICON_DIR"
+      - name: Associa certificato e profilo Apple
+        script: |
+          set -euo pipefail
+          PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
+          test -d "$PROJECT"
+          # Usa esclusivamente il profilo appena generato per iPhone 14.
+          # Evita di selezionare un vecchio profilo Ad Hoc con lo stesso bundle ID.
+          EXPECTED_UUID="a62933cd-33e5-4712-a73f-43099b5149c9"
+          EXPECTED_UDID="00008110-000609C102FB801E"
+          PROFILE_SELECTED=""
+          for PROFILE in "$HOME"/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision "$HOME"/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision; do
+            [ -f "$PROFILE" ] || continue
+            PLIST="$CM_BUILD_DIR/petali-candidate-profile.plist"
+            /usr/bin/security cms -D -i "$PROFILE" > "$PLIST" 2>/dev/null || continue
+            PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PLIST" 2>/dev/null || true)"
+            if [ "$PROFILE_UUID" = "$EXPECTED_UUID" ]; then
+              if ! /usr/bin/grep -q "$EXPECTED_UDID" "$PLIST"; then
+                echo "ERRORE: profilo trovato ma iPhone 14 non autorizzato."
+                exit 2
+              fi
+              PROFILE_SELECTED="$PROFILE"
+              break
+            fi
+          done
+          if [ -z "$PROFILE_SELECTED" ]; then
+            echo "ERRORE: profilo Petali-iPhone14-AdHoc non caricato su Codemagic."
+            echo "Carica il file con Reference name Petali-iPhone14-AdHoc in Code signing identities > iOS provisioning profiles."
+            exit 2
+          fi
+          echo "Profilo corretto trovato: $EXPECTED_UUID (iPhone 14 incluso)"
+          xcode-project use-profiles --project "$PROJECT" --profile "$PROFILE_SELECTED" --archive-method=ad-hoc
+      - name: Aggiorna numero build per installazione Ad Hoc
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          # Numero crescente univoco: evita di reinstallare una build Ad Hoc con lo stesso numero.
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Indice Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( 5000 + BUILD_INDEX ))
+          if [ "$NEXT_BUILD_NUMBER" -gt 9999 ]; then echo "Numero build oltre il limite"; exit 1; fi
+          agvtool new-marketing-version 1.0.1
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          echo "Numero build iPhone Ad Hoc: $NEXT_BUILD_NUMBER"
+      - name: Genera IPA Ad Hoc per iPhone
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          xcode-project build-ipa --project App.xcodeproj --scheme App
+          IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          mkdir -p "$CM_EXPORT_DIR"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-1.0.1-Crediti-TEST-iOS-AdHoc.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-1.0.1-Crediti-TEST-iOS-AdHoc.ipa"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-1.0.1-Crediti-TEST-iOS-AdHoc.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+  petali-credits-ios-live:
+    name: Petali 1.0.1 CREDITI - iOS App Store LIVE
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: SimulaEsame-Codemagic
+    environment:
+      groups:
+        - petali_revenuecat
+        - petali_admob
+      node: v22.11.0
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.aivevia.petali
+    scripts:
+      - name: Recupera sorgenti Petali per iPhone
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/petali-credits-rewarded-1.0.1 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Prepara progetto iOS
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          npm ci --no-audit --no-fund
+          npm install --save-exact @capacitor-community/admob@8.4.2 --no-audit --no-fund
+          npm test
+          if [ -z "${REVENUECAT_IOS_PUBLIC_KEY:-}" ]; then
+            echo "ERRORE: chiave pubblica RevenueCat iOS mancante. Configura REVENUECAT_IOS_PUBLIC_KEY in Codemagic prima di generare la build App Store."
+            exit 2
+          fi
+          export PETALI_ADS_PLATFORM=ios PETALI_ADS_MODE=live
+          node native/configure-ads.mjs web
+          npm run build:bridge
+          npx cap add ios
+          npx cap sync ios
+          node native/configure-ads.mjs native
+          # Icona iOS: usa sips, nativo macOS, senza compilare script Swift.
+          # Il passaggio intermedio JPEG rimuove l'alpha: App Store richiede un'icona opaca.
+          ICON_SOURCE="$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_DIR="$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          test -s "$ICON_SOURCE"
+          mkdir -p "$ICON_DIR"
+          ICON_TMP="$(mktemp -d)"
+          sips -s format jpeg -s formatOptions best "$ICON_SOURCE" --out "$ICON_TMP/petali.jpg" >/dev/null
+          sips -s format png -z 1024 1024 "$ICON_TMP/petali.jpg" --out "$ICON_DIR/AppIcon-512@2x.png" >/dev/null
+          python3 - "$ICON_DIR/Contents.json" <<'PYICON'
+          import json, sys
+          with open(sys.argv[1], 'w', encoding='utf8') as fp:
+              json.dump({'images': [{'filename': 'AppIcon-512@2x.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'}], 'info': {'author': 'xcode', 'version': 1}}, fp)
+          PYICON
+          test -s "$ICON_DIR/AppIcon-512@2x.png"
+          echo "Icona PETALI iOS creata in $ICON_DIR"
+      - name: Associa certificato e profilo Apple
+        script: |
+          set -euo pipefail
+          PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
+          test -d "$PROJECT"
+          xcode-project use-profiles --project "$PROJECT"
+      - name: Assegna numero univoco per App Store Connect
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          # Build number univoco e crescente tra i workflow Codemagic.
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Indice Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( 6000 + BUILD_INDEX ))
+          if [ "$NEXT_BUILD_NUMBER" -gt 9999 ]; then echo "Numero build oltre il limite"; exit 1; fi
+          agvtool new-marketing-version 1.0.1
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          echo "Numero iOS App Store Connect: $NEXT_BUILD_NUMBER"
+      - name: Genera IPA firmata per App Store Connect
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          xcode-project build-ipa --project App.xcodeproj --scheme App
+          IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          mkdir -p "$CM_EXPORT_DIR"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-1.0.1-Crediti-LIVE-AppStore.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-1.0.1-Crediti-LIVE-AppStore.ipa"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-1.0.1-Crediti-LIVE-AppStore.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
+
+  petali-credits-android-test:
+    name: Petali CREDITI - Android APK TEST
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      node: v22.11.0
+      java: 21
+    scripts:
+      - name: Recupera sorgenti aggiornati
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/petali-credits-rewarded-1.0.1 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Test e compilazione APK
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          python3 verifica_petali.py
+          npm ci --no-audit --no-fund
+          npm install --save-exact @capacitor-community/admob@8.4.2 --no-audit --no-fund
+          npm test
+          export PETALI_ADS_PLATFORM=android PETALI_ADS_MODE=test
+          node native/configure-ads.mjs web
+          npm run build:bridge
+          npx cap sync android
+          node native/configure-ads.mjs native
+          printf "sdk.dir=%s\n" "$ANDROID_SDK_ROOT" > android/local.properties
+          printf '\nandroid.useAndroidX=true\nandroid.enableJetifier=true\n' >> android/gradle.properties
+          cd android
+          chmod +x gradlew
+          echo "Java usata da Codemagic:"
+          java -version
+          ./gradlew --version
+          mkdir -p "$CM_EXPORT_DIR"
+          ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee "$CM_EXPORT_DIR/Petali-Regali-Android-build.log"
+          cp app/build/outputs/apk/debug/app-debug.apk "$CM_EXPORT_DIR/Petali-Crediti-TEST-Android.apk"
+          test -s "$CM_EXPORT_DIR/Petali-Crediti-TEST-Android.apk"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-Crediti-TEST-Android.apk
+      - $CM_EXPORT_DIR/Petali-Regali-Android-build.log
+
+  petali-credits-android-live:
+    name: Petali CREDITI - Android Google Play LIVE
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      groups:
+        - petali_admob
+      android_signing:
+        - petali-upload
+      node: v22.11.0
+      java: 21
+      vars:
+        PETALI_ANDROID_VERSION_CODE: "20261127"
+    scripts:
+      - name: Scarica versione PETALI REGALI V2
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/petali-credits-rewarded-1.0.1 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+      - name: Controlla chiave di firma PETALI
+        script: |
+          set -euo pipefail
+          for KEY in CM_KEYSTORE_PATH CM_KEYSTORE_PASSWORD CM_KEY_ALIAS CM_KEY_PASSWORD; do
+            if [ -z "${!KEY:-}" ]; then
+              echo "ERRORE: $KEY mancante. Controlla l'Android keystore 'petali-upload' in Codemagic."
+              exit 2
+            fi
+          done
+          test -s "$CM_KEYSTORE_PATH"
+          if [ "$CM_KEY_ALIAS" != "petali" ]; then
+            echo "ERRORE: usare la chiave di upload PETALI esistente, con alias 'petali'."
+            exit 2
+          fi
+          keytool -list -keystore "$CM_KEYSTORE_PATH" -storepass:env CM_KEYSTORE_PASSWORD -alias "$CM_KEY_ALIAS" >/dev/null
+          echo "Firma PETALI verificata; acquisti Android via Google Play Billing nativo"
+      - name: Test, bridge Capacitor e AAB Release firmato
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          python3 verifica_petali.py
+          npm ci --no-audit --no-fund
+          npm install --save-exact @capacitor-community/admob@8.4.2 --no-audit --no-fund
+          npm test
+          export PETALI_ADS_PLATFORM=android PETALI_ADS_MODE=live
+          node native/configure-ads.mjs web
+          npm run build:bridge
+          npx cap sync android
+          node native/configure-ads.mjs native
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > android/local.properties
+          printf '\nandroid.useAndroidX=true\nandroid.enableJetifier=true\n' >> android/gradle.properties
+          cd android
+          chmod +x gradlew
+          mkdir -p "$CM_EXPORT_DIR"
+          ./gradlew --no-daemon --stacktrace bundleRelease 2>&1 | tee "$CM_EXPORT_DIR/Petali-Regali-V2-AAB-build.log"
+          BUNDLE="app/build/outputs/bundle/release/app-release.aab"
+          test -s "$BUNDLE"
+          jarsigner -verify "$BUNDLE" 2>&1 | tee "$CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log"
+          grep -q "jar verified" "$CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log"
+          unzip -tq "$BUNDLE" >/dev/null
+          cp "$BUNDLE" "$CM_EXPORT_DIR/Petali-Crediti-LIVE-Play-FIRMATO.aab"
+          shasum -a 256 "$CM_EXPORT_DIR/Petali-Crediti-LIVE-Play-FIRMATO.aab"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-Crediti-LIVE-Play-FIRMATO.aab
+      - $CM_EXPORT_DIR/Petali-Regali-V2-AAB-build.log
+      - $CM_EXPORT_DIR/Petali-Regali-V2-signature-check.log
