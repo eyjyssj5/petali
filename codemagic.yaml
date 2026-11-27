@@ -526,11 +526,22 @@ workflows:
       groups:
         - petali_revenuecat
       node: v22.11.0
-      xcode: latest
+      xcode: "27.2"
       ios_signing:
         distribution_type: ad_hoc
         bundle_identifier: com.aivevia.petali
     scripts:
+      - name: Verifica Xcode e SDK iOS 27
+        script: |
+          set -euo pipefail
+          xcodebuild -version
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: $SDK_VERSION"
+          SDK_MAJOR="${SDK_VERSION%%.*}"
+          if [ "$SDK_MAJOR" -lt 27 ]; then
+            echo "ERRORE: richiesto SDK iOS 27 o successivo"
+            exit 2
+          fi
       - name: Recupera sorgenti Petali per iPhone
         script: |
           set -euo pipefail
@@ -638,11 +649,22 @@ workflows:
         - petali_revenuecat
         - petali_admob
       node: v22.11.0
-      xcode: latest
+      xcode: "27.2"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.aivevia.petali
     scripts:
+      - name: Verifica Xcode e SDK iOS 27
+        script: |
+          set -euo pipefail
+          xcodebuild -version
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: $SDK_VERSION"
+          SDK_MAJOR="${SDK_VERSION%%.*}"
+          if [ "$SDK_MAJOR" -lt 27 ]; then
+            echo "ERRORE: richiesto SDK iOS 27 o successivo"
+            exit 2
+          fi
       - name: Recupera sorgenti Petali per iPhone
         script: |
           set -euo pipefail
