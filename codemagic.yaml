@@ -741,6 +741,109 @@ workflows:
         submit_to_testflight: false
         submit_to_app_store: false
 
+  petali-credits-ios-testflight:
+    name: Petali 1.0.1 CREDITI - iOS TestFlight TEST
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: SimulaEsame-Codemagic
+    environment:
+      groups:
+        - petali_revenuecat
+      node: v22.11.0
+      xcode: "27.2"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.aivevia.petali
+    scripts:
+      - name: Verifica Xcode e SDK iOS 27
+        script: |
+          set -euo pipefail
+          xcodebuild -version
+          SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: $SDK_VERSION"
+          SDK_MAJOR="${SDK_VERSION%%.*}"
+          if [ "$SDK_MAJOR" -lt 27 ]; then
+            echo "ERRORE: richiesto SDK iOS 27 o successivo"
+            exit 2
+          fi
+      - name: Recupera sorgenti Petali per iPhone
+        script: |
+          set -euo pipefail
+          git clone --depth 1 --branch feature/petali-credits-rewarded-1.0.1 https://github.com/eyjyssj5/petali-privacy.git "$CM_BUILD_DIR/petali-build"
+          git -C "$CM_BUILD_DIR/petali-build" rev-parse HEAD
+      - name: Prepara progetto iOS
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27"
+          npm ci --no-audit --no-fund
+          npm install --save-exact @capacitor-community/admob@8.4.2 --no-audit --no-fund
+          npm test
+          if [ -z "${REVENUECAT_IOS_PUBLIC_KEY:-}" ]; then
+            echo "ERRORE: chiave pubblica RevenueCat iOS mancante. Configura REVENUECAT_IOS_PUBLIC_KEY in Codemagic prima di generare la build TestFlight."
+            exit 2
+          fi
+          export PETALI_ADS_PLATFORM=ios PETALI_ADS_MODE=test
+          node native/configure-ads.mjs web
+          npm run build:bridge
+          npx cap add ios
+          npx cap sync ios
+          node native/configure-ads.mjs native
+          # Icona iOS: usa sips, nativo macOS, senza compilare script Swift.
+          # Il passaggio intermedio JPEG rimuove l'alpha: App Store richiede un'icona opaca.
+          ICON_SOURCE="$PWD/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+          ICON_DIR="$PWD/ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          test -s "$ICON_SOURCE"
+          mkdir -p "$ICON_DIR"
+          ICON_TMP="$(mktemp -d)"
+          sips -s format jpeg -s formatOptions best "$ICON_SOURCE" --out "$ICON_TMP/petali.jpg" >/dev/null
+          sips -s format png -z 1024 1024 "$ICON_TMP/petali.jpg" --out "$ICON_DIR/AppIcon-512@2x.png" >/dev/null
+          python3 - "$ICON_DIR/Contents.json" <<'PYICON'
+          import json, sys
+          with open(sys.argv[1], 'w', encoding='utf8') as fp:
+              json.dump({'images': [{'filename': 'AppIcon-512@2x.png', 'idiom': 'universal', 'platform': 'ios', 'size': '1024x1024'}], 'info': {'author': 'xcode', 'version': 1}}, fp)
+          PYICON
+          test -s "$ICON_DIR/AppIcon-512@2x.png"
+          echo "Icona PETALI iOS creata in $ICON_DIR"
+      - name: Associa certificato e profilo Apple
+        script: |
+          set -euo pipefail
+          PROJECT="$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App/App.xcodeproj"
+          test -d "$PROJECT"
+          xcode-project use-profiles --project "$PROJECT" --custom-export-options='{"testFlightInternalTestingOnly": true}'
+      - name: Assegna numero univoco per App Store Connect
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          # Build number univoco e crescente tra i workflow Codemagic.
+          BUILD_INDEX="${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-${CM_BUILD_NUMBER:-}}}"
+          case "$BUILD_INDEX" in
+            ''|*[!0-9]*) echo "Indice Codemagic non valido"; exit 1 ;;
+          esac
+          NEXT_BUILD_NUMBER=$(( 6000 + BUILD_INDEX ))
+          if [ "$NEXT_BUILD_NUMBER" -gt 9999 ]; then echo "Numero build oltre il limite"; exit 1; fi
+          agvtool new-marketing-version 1.0.1
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          echo "Numero iOS App Store Connect: $NEXT_BUILD_NUMBER"
+      - name: Genera IPA firmata per App Store Connect
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/petali-build/android-snapshot-2026-10-27/ios/App"
+          xcode-project build-ipa --project App.xcodeproj --scheme App
+          IPA="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          mkdir -p "$CM_EXPORT_DIR"
+          cp "$IPA" "$CM_EXPORT_DIR/Petali-1.0.1-Crediti-TEST-TestFlight.ipa"
+          test -s "$CM_EXPORT_DIR/Petali-1.0.1-Crediti-TEST-TestFlight.ipa"
+    artifacts:
+      - $CM_EXPORT_DIR/Petali-1.0.1-Crediti-TEST-TestFlight.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
+
   petali-credits-android-test:
     name: Petali CREDITI - Android APK TEST
     instance_type: mac_mini_m2
