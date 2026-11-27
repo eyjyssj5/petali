@@ -647,9 +647,11 @@ workflows:
     environment:
       groups:
         - petali_revenuecat
-        - petali_admob
       node: v22.11.0
       xcode: "27.2"
+      vars:
+        PETALI_ADMOB_IOS_APP_ID: "ca-app-pub-7468719367826803~6209976584"
+        PETALI_ADMOB_IOS_REWARDED_ID: "ca-app-pub-7468719367826803/7139914873"
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.aivevia.petali
@@ -889,13 +891,13 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
-      groups:
-        - petali_admob
       android_signing:
         - petali-upload
       node: v22.11.0
       java: 21
       vars:
+        PETALI_ADMOB_ANDROID_APP_ID: "ca-app-pub-7468719367826803~1504444811"
+        PETALI_ADMOB_ANDROID_REWARDED_ID: "ca-app-pub-7468719367826803/1036047661"
         PETALI_ANDROID_VERSION_CODE: "20261127"
     scripts:
       - name: Scarica versione PETALI REGALI V2
