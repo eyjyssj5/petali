@@ -1,7 +1,7 @@
 name: Petali iOS - GitHub Actions gratuito
 on:
   push:
-    branches: [main]
+    branches: [feature/petali-regali-gif-fedelta-20261128]
     paths: ['.github/workflows/petali-ios-free.yml']
   workflow_dispatch:
     inputs:
@@ -21,8 +21,8 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 45
     env:
-      MODE: ${{ inputs.mode || (github.event_name == 'push' && github.event.head_commit.message == 'Fix Petali signing scope for Swift packages; retry internal TestFlight once' && 'testflight') || 'check' }}
-      SOURCE_SHA: d38012d33526307cbbc1a16df9afa5cca3232502
+      MODE: check
+      SOURCE_SHA: 69fde142f4a893a6e56ede49826eb3f610d3b9a0
       PETALI_ADS_PLATFORM: ios
       PETALI_ADMOB_IOS_APP_ID: "ca-app-pub-7468719367826803~6209976584"
       PETALI_ADMOB_IOS_REWARDED_ID: "ca-app-pub-7468719367826803/7139914873"
